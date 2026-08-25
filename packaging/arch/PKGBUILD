@@ -1,0 +1,27 @@
+# Maintainer: sudo-megas <noreply@github.com>
+pkgname=aventurine
+pkgver=1.0
+pkgrel=1
+pkgdesc="Screen colour picker"
+arch=('x86_64')
+url="https://github.com/sudo-megas/AVENTURINE"
+license=('GPL-3.0-or-later')
+depends=('gtk4' 'glib2')
+makedepends=('vala' 'pkgconf' 'gcc' 'make')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "AVENTURINE-$pkgver"
+  make
+}
+
+check() {
+  cd "AVENTURINE-$pkgver"
+  make test
+}
+
+package() {
+  cd "AVENTURINE-$pkgver"
+  make DESTDIR="$pkgdir" PREFIX=/usr install
+}

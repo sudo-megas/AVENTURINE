@@ -1,0 +1,89 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm vala gtk4 glib2 pkgconf git
+      - uses: actions/checkout@v4
+      - run: make
+      - run: make test
+
+  arch:
+    needs: build
+    # Tags build the real artifact; a manual run lets the packaging be proved
+    # before a tag exists, so a broken PKGBUILD is never first seen at release.
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm vala gtk4 glib2 pkgconf git sudo
+      - uses: actions/checkout@v4
+      - run: |
+          useradd -m builder
+          chown -R builder .
+          sudo -u builder bash -c 'cd packaging/arch && makepkg -f --nodeps'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: packaging/arch/*.pkg.tar.zst
+
+  debian:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - run: |
+          apt-get update
+          apt-get install -y valac libgtk-4-dev pkg-config make gcc dpkg-dev git
+      - uses: actions/checkout@v4
+      - run: make
+      - run: bash packaging/debian/rules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: '*.deb'
+
+  release:
+    needs: [arch, debian]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch-package
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: debian-package
+          path: artifacts
+
+      - name: Check both artifacts arrived and are not empty
+        run: |
+          ls -la artifacts
+          test -s artifacts/*.pkg.tar.zst
+          test -s artifacts/*.deb
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            artifacts/*.pkg.tar.zst \
+            artifacts/*.deb \
+            --title "AVENTURINE ${GITHUB_REF_NAME}" \
+            --notes "First release. Screen colour picker with fourteen formats, WCAG contrast, OKLCH tint and shade ramp, and a hundred-entry history. Works through the desktop portal on any compositor that implements PickColor, with image picking as a fallback."

@@ -1,0 +1,15 @@
+# build products
+aventurine
+convert-test
+*.o
+*.c
+*.h
+
+# packaging staging
+packaging/**/pkg/
+packaging/**/src/
+packaging/debian/staging/
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.deb
+*.tar.gz

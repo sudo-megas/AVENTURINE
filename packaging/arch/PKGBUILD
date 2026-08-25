@@ -4,6 +4,9 @@ pkgver=1.0
 pkgrel=1
 pkgdesc="Screen colour picker"
 arch=('x86_64')
+# CORE.md section 18 lists exactly two release artifacts. Without this, makepkg
+# also emits aventurine-debug-*.pkg.tar.zst, which is not one of them.
+options=('!debug')
 url="https://github.com/sudo-megas/AVENTURINE"
 license=('GPL-3.0-or-later')
 depends=('gtk4' 'glib2' 'cairo' 'gdk-pixbuf2')

@@ -37,7 +37,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: arch-package
-          path: packaging/arch/*.pkg.tar.zst
+          path: |
+            packaging/arch/*.pkg.tar.zst
+            !packaging/arch/*-debug-*.pkg.tar.zst
 
   debian:
     needs: build
@@ -78,8 +80,18 @@ jobs:
       - name: Check both artifacts arrived and are not empty
         run: |
           ls -la artifacts
-          test -s artifacts/*.pkg.tar.zst
-          test -s artifacts/*.deb
+          # Checked one file at a time. `test -s glob` looks right and is not:
+          # the moment the glob matches more than one path, test receives three
+          # arguments and fails with "binary operator expected" rather than
+          # checking anything.
+          found=0
+          for f in artifacts/*.pkg.tar.zst artifacts/*.deb; do
+            test -f "$f" || { echo "missing: $f"; exit 1; }
+            test -s "$f" || { echo "empty: $f"; exit 1; }
+            echo "ok: $f ($(stat -c%s "$f") bytes)"
+            found=$((found + 1))
+          done
+          test "$found" -eq 2 || { echo "expected 2 artifacts, found $found"; exit 1; }
 
       - name: Create the release
         env:

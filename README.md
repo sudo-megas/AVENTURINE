@@ -4,16 +4,21 @@
 
 # AVENTURINE
 
-[![version](https://img.shields.io/badge/version-1.0-26a269?style=for-the-badge)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
-[![released](https://img.shields.io/badge/released-2026--08--25-4E6E5D?style=for-the-badge)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
-[![licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-A81D33?style=for-the-badge)](LICENSE)
+<p align="center">
+  <img alt="Arch Linux package" src="https://img.shields.io/badge/Arch%20Linux-106%20KB-1793D1?style=for-the-badge&logo=archlinux&logoColor=white">
+  <img alt="Debian package"     src="https://img.shields.io/badge/Debian%20-83.9%20KB-A80030?style=for-the-badge&logo=debian&logoColor=white">
+</p>
 
-[![Arch package](https://img.shields.io/badge/Arch-106%20KB-1793D1?style=for-the-badge&logo=archlinux&logoColor=white)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
-[![Debian package](https://img.shields.io/badge/Debian-84%20KB-A81D33?style=for-the-badge&logo=debian&logoColor=white)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
+<p align="center">
+<img alt="Version"            src="https://img.shields.io/badge/version-1.0-26a269?style=for-the-badge">
+  <img alt="Release date"         src="https://img.shields.io/badge/released-2026--08--25-4E6E5D?style=for-the-badge">
+  <img alt="Licence"              src="https://img.shields.io/badge/licence-GPL--3.0--or--later-A81D33?style=for-the-badge">
+</p>
 
-**Ekrandan renk seçin. Piksele tıklayın, o rengin bilmeye değer her gösterimini alın.**
 
-**Pick a colour from the screen. Click a pixel, get every representation of that colour worth having.**
+**Pick a colour from the screen. Click a pixel, get 14 properties that the image has.**
+
+***HEX RGB RGB% HSL HSV HWB CMYK Linear-RGB LAB LCH OKLCH Luminance CSS-name xkcd-name***
 
 </div>
 
@@ -54,6 +59,16 @@ Both runtime libraries are already present on any system that runs a single GTK 
 
 The packages declare two more — `libcairo` and `libgdk-pixbuf` — because the binary links them directly, for drawing swatches and for reading image pixels. They are not additional choices: both arrive inside the GTK stack and are already installed wherever `gtk4` is. What a project depends on and what a package must declare are different questions, and the packaging answers the second one honestly.
 
+---
+
+<p align="center"><strong>
+### !!!!! ###
+<p align="center"><strong>
+ !!! Cosmic portal is declaring that it has "PickColor" ability but it is only present when the compositor is Cosmic itself. The portal tested under Niri as a compositor and failed. xdg-desktop-portal-wlr is recommended in case of a similar case would happen. !!!
+</p>
+
+---
+
 ### Why there is no `libportal`
 
 `libportal` is the obvious thing to reach for, and it is deliberately absent.
@@ -61,6 +76,7 @@ The packages declare two more — `libcairo` and `libgdk-pixbuf` — because the
 The application makes exactly **two** kinds of portal call: `org.freedesktop.portal.Screenshot.PickColor` to pick a colour, and `org.freedesktop.portal.Settings.ReadOne` to follow your light or dark preference. Each is a single D-Bus method plus one signal subscription, written directly against `GIO`'s D-Bus client in a few dozen lines that are in this repository and readable.
 
 Adding `libportal` would buy roughly forty lines of convenience and cost a runtime dependency, a version floor, and a second place for portal behaviour to be defined. A dependency should do real work. That one would not.
+
 
 ---
 

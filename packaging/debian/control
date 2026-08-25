@@ -1,0 +1,10 @@
+Package: aventurine
+Version: 1.0-1
+Section: graphics
+Priority: optional
+Architecture: amd64
+Depends: libgtk-4-1, libglib2.0-0
+Maintainer: sudo-megas <noreply@github.com>
+Description: Screen colour picker
+ Picks a colour from the screen through the desktop portal and shows it
+ in fourteen formats with contrast ratios and a tint and shade ramp.

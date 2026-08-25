@@ -8,8 +8,8 @@
 [![released](https://img.shields.io/badge/released-2026--08--25-4E6E5D?style=for-the-badge)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
 [![licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-A81D33?style=for-the-badge)](LICENSE)
 
-[![Arch package](https://img.shields.io/badge/Arch-pending-1793D1?style=for-the-badge&logo=archlinux&logoColor=white)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
-[![Debian package](https://img.shields.io/badge/Debian-93%20KB-A81D33?style=for-the-badge&logo=debian&logoColor=white)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
+[![Arch package](https://img.shields.io/badge/Arch-106%20KB-1793D1?style=for-the-badge&logo=archlinux&logoColor=white)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
+[![Debian package](https://img.shields.io/badge/Debian-84%20KB-A81D33?style=for-the-badge&logo=debian&logoColor=white)](https://github.com/sudo-megas/AVENTURINE/releases/tag/v1.0)
 
 **Ekrandan renk seçin. Piksele tıklayın, o rengin bilmeye değer her gösterimini alın.**
 

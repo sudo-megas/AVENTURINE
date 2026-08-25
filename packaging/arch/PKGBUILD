@@ -12,7 +12,7 @@ license=('GPL-3.0-or-later')
 depends=('gtk4' 'glib2' 'cairo' 'gdk-pixbuf2')
 makedepends=('vala' 'pkgconf' 'gcc' 'make')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('36d92daa395143db3e3c6e9af57924b3658b4bf0e86751596e7bf9e131bcd3ee')
 
 build() {
   cd "AVENTURINE-$pkgver"

@@ -13,6 +13,13 @@
  *   --mode cancel    respond 1, user cancelled
  *   --mode error     respond 2, failure
  *   --colour R G B   doubles in 0..1, default 0.784314 0.588235 0.243137
+ *   --fast           emit Response BEFORE returning the method reply
+ *
+ * --fast is the nastier ordering and it is legal: nothing obliges a portal to
+ * send its method reply before the signal. A client that takes its coroutine
+ * resume handle before the PickColor call crashes here, because the handle
+ * re-enters whichever await is currently parked. That was a real crash in this
+ * project, so the case is pinned.
  */
 
 [DBus (name = "org.freedesktop.portal.Screenshot")]
@@ -26,17 +33,20 @@ public class MockScreenshot : Object {
     private double g;
     private double b;
     private uint32 code;
+    private bool fast;
 
     /* Long enough that a client which subscribes after calling has already
      * lost the race, short enough not to slow the suite down. */
     private const uint RESPONSE_DELAY_MS = 350;
 
-    public MockScreenshot (DBusConnection conn, double r, double g, double b, uint32 code) {
+    public MockScreenshot (DBusConnection conn, double r, double g, double b,
+                           uint32 code, bool fast) {
         this.conn = conn;
         this.r = r;
         this.g = g;
         this.b = b;
         this.code = code;
+        this.fast = fast;
     }
 
     public ObjectPath pick_color (string parent_window,
@@ -58,33 +68,45 @@ public class MockScreenshot : Object {
         uint32 cc = code;
         DBusConnection c = conn;
 
+        if (fast) {
+            /* Straight down the wire, ahead of this method's own reply. */
+            emit (c, path, cc, rr, gg, bb);
+            return new ObjectPath (path);
+        }
+
         Timeout.add (RESPONSE_DELAY_MS, () => {
-            var results = new VariantBuilder (new VariantType ("a{sv}"));
-            if (cc == 0) {
-                Variant[] triple = {
-                    new Variant.double (rr), new Variant.double (gg), new Variant.double (bb)
-                };
-                results.add ("{sv}", "color", new Variant.tuple (triple));
-            }
-            Variant[] response = { new Variant.uint32 (cc), results.end () };
-            try {
-                c.emit_signal (null, path, "org.freedesktop.portal.Request",
-                               "Response", new Variant.tuple (response));
-                stdout.printf ("mock: Response %u emitted\n", cc);
-                stdout.flush ();
-            } catch (Error e) {
-                stderr.printf ("mock: emit failed: %s\n", e.message);
-            }
+            emit (c, path, cc, rr, gg, bb);
             return Source.REMOVE;
         });
 
         return new ObjectPath (path);
+    }
+
+    private static void emit (DBusConnection c, string path, uint32 cc,
+                              double rr, double gg, double bb) {
+        var results = new VariantBuilder (new VariantType ("a{sv}"));
+        if (cc == 0) {
+            Variant[] triple = {
+                new Variant.double (rr), new Variant.double (gg), new Variant.double (bb)
+            };
+            results.add ("{sv}", "color", new Variant.tuple (triple));
+        }
+        Variant[] response = { new Variant.uint32 (cc), results.end () };
+        try {
+            c.emit_signal (null, path, "org.freedesktop.portal.Request",
+                           "Response", new Variant.tuple (response));
+            stdout.printf ("mock: Response %u emitted\n", cc);
+            stdout.flush ();
+        } catch (Error e) {
+            stderr.printf ("mock: emit failed: %s\n", e.message);
+        }
     }
 }
 
 int main (string[] args) {
     double r = 0.784314, g = 0.588235, b = 0.243137;   /* #C8963E */
     uint32 code = 0;
+    bool fast = false;
 
     for (int i = 1; i < args.length; i++) {
         if (args[i] == "--mode" && i + 1 < args.length) {
@@ -96,6 +118,8 @@ int main (string[] args) {
                     stderr.printf ("mock: unknown mode\n");
                     return 2;
             }
+        } else if (args[i] == "--fast") {
+            fast = true;
         } else if (args[i] == "--colour" && i + 3 < args.length) {
             r = double.parse (args[++i]);
             g = double.parse (args[++i]);
@@ -112,7 +136,7 @@ int main (string[] args) {
         (conn) => {
             try {
                 conn.register_object ("/org/freedesktop/portal/desktop",
-                                      new MockScreenshot (conn, r, g, b, code));
+                                      new MockScreenshot (conn, r, g, b, code, fast));
             } catch (Error e) {
                 error ("mock: register failed: %s", e.message);
             }

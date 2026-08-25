@@ -19,16 +19,17 @@ fi
 run_case() {
     mode="$1"
     expectation="$2"
-    echo "--- mock portal, mode $mode ---"
+    extra="${3:-}"
+    echo "--- mock portal, mode $mode $extra ---"
     if ! dbus-run-session -- sh -c '
-        ./mock-portal --mode "$1" >/dev/null 2>&1 &
+        ./mock-portal --mode "$1" $3 >/dev/null 2>&1 &
         mock=$!
         gdbus wait --session org.freedesktop.portal.Desktop --timeout 10
         ./portal-test "$2"
         result=$?
         kill "$mock" 2>/dev/null || true
         exit $result
-    ' sh "$mode" "$expectation"; then
+    ' sh "$mode" "$expectation" "$extra"; then
         status=1
     fi
 }
@@ -36,6 +37,10 @@ run_case() {
 run_case success "#C8963E"
 run_case cancel  expect-cancel
 run_case error   expect-error
+
+# The Response beats the method reply down the wire. This crashed the client
+# until the resume handle stopped being taken before the PickColor call.
+run_case success "#C8963E" --fast
 
 if [ "$status" -eq 0 ]; then
     echo "portal backend: all cases passed"

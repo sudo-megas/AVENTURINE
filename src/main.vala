@@ -4,14 +4,104 @@
 
 namespace Aventurine {
 
-    public const string VERSION = "1.0";
-    public const string APP_ID  = "io.github.sudomegas.aventurine";
+    public const string VERSION      = "1.0";
+    public const string APP_ID       = "io.github.sudomegas.aventurine";
+    public const string RELEASE_DATE = "2026-08-25";
+    public const string SOURCE_URL   = "https://github.com/sudo-megas/AVENTURINE";
+
+    /* The ordered list of capture backends. CORE.md section 5.
+     *
+     * probe() runs on each in order at startup, the first to answer is cached
+     * for the session, and a pick() that fails drops the cache so the next
+     * attempt probes again. Moving between desktops changes which rung answers
+     * and nothing else in the application notices.
+     */
+    public class SourceLadder : Object {
+
+        private ColourSource[] rungs;
+        private ColourSource? cached = null;
+        private bool probed = false;
+
+        /* CORE.md section 7: the only environment variable the app reads. */
+        private string? forced;
+
+        public PortalSource portal { get; private set; }
+
+        public SourceLadder () {
+            portal = new PortalSource ();
+            rungs = { portal, new ImageSource () };
+
+            string? requested = Environment.get_variable ("AVENTURINE_SOURCE");
+            forced = (requested != null && requested != "") ? requested : null;
+        }
+
+        public unowned ColourSource[] sources () {
+            return rungs;
+        }
+
+        public bool forced_is_valid () {
+            if (forced == null) {
+                return false;
+            }
+            foreach (var rung in rungs) {
+                if (rung.id == forced) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /* The backend in use, or null when nothing passed. Forcing skips
+         * probing entirely, which is the point of it. */
+        public ColourSource? selected () {
+            if (forced != null) {
+                foreach (var rung in rungs) {
+                    if (rung.id == forced) {
+                        return rung;
+                    }
+                }
+                /* An unrecognised value falls through to normal probing rather
+                 * than leaving the app with no backend at all. */
+            }
+
+            if (!probed) {
+                probed = true;
+                cached = null;
+                foreach (var rung in rungs) {
+                    if (rung.probe ()) {
+                        cached = rung;
+                        break;
+                    }
+                }
+            }
+            return cached;
+        }
+
+        /* Called when a pick fails, so a backend that has gone away is not
+         * used again for the rest of the session. */
+        public void reprobe () {
+            probed = false;
+            cached = null;
+        }
+
+        public ColourSource? by_id (string wanted) {
+            foreach (var rung in rungs) {
+                if (rung.id == wanted) {
+                    return rung;
+                }
+            }
+            return null;
+        }
+    }
 
     public class App : Gtk.Application {
+
+        public SourceLadder ladder { get; private set; }
 
         public App () {
             Object (application_id: APP_ID,
                     flags: ApplicationFlags.FLAGS_NONE);
+            ladder = new SourceLadder ();
         }
 
         protected override void activate () {
@@ -42,7 +132,7 @@ environment:
         for (int i = 1; i < args.length; i++) {
             switch (args[i]) {
                 case "--doctor":
-                    return 0;
+                    return Doctor.run ();
                 case "--version":
                 case "-v":
                     stdout.printf ("aventurine %s\n", VERSION);

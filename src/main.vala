@@ -98,10 +98,20 @@ namespace Aventurine {
 
         public SourceLadder ladder { get; private set; }
 
+        private Theme theme;
+
         public App () {
             Object (application_id: APP_ID,
                     flags: ApplicationFlags.FLAGS_NONE);
             ladder = new SourceLadder ();
+        }
+
+        protected override void startup () {
+            base.startup ();
+            /* Follow the desktop's light or dark preference, and keep
+             * following it: CORE.md section 15. */
+            theme = new Theme ();
+            theme.start ();
         }
 
         protected override void activate () {

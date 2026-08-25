@@ -206,8 +206,27 @@ private void test_linear () {
     near (lin.g, 0.445, 1e-3, "#A1B2C3 linear green");
     near (lin.b, 0.546, 1e-3, "#A1B2C3 linear blue");
 
-    /* The two halves of the piecewise curve must meet. */
-    near (Convert.linearise (0.04045), 0.04045 / 12.92, 1e-9, "gamma curve is continuous");
+    /* Both halves of the piecewise curve, each exercised on its own side of
+     * the threshold and checked against an independently written formula.
+     * Comparing linearise(0.04045) against 0.04045/12.92 was a tautology: it
+     * restates the branch it is testing, and survived replacing the entire
+     * power branch with a constant. */
+    near (Convert.linearise (0.02), 0.02 / 12.92, 1e-12,
+          "below the threshold, linearise is the linear branch");
+    near (Convert.linearise (0.04046), Math.pow ((0.04046 + 0.055) / 1.055, 2.4), 1e-12,
+          "above the threshold, linearise is the power branch");
+    near (Convert.encode (0.002), 0.002 * 12.92, 1e-12,
+          "below the threshold, encode is the linear branch");
+    near (Convert.encode (0.005), 1.055 * Math.pow (0.005, 1.0 / 2.4) - 0.055, 1e-12,
+          "above the threshold, encode is the power branch");
+
+    /* The two branches very nearly meet. They do not meet exactly, because
+     * 0.04045 is a rounded form of the true crossover (0.0404482...), so the
+     * published sRGB constants leave a step of about 2.3e-9 at the join. That
+     * is the spec's discontinuity, transcribed faithfully per CORE.md 8.1,
+     * not an error here. */
+    near (Convert.linearise (0.04045), Math.pow ((0.04045 + 0.055) / 1.055, 2.4), 1e-8,
+          "the two gamma branches meet at the threshold to within the spec's own step");
     near (Convert.encode (Convert.linearise (0.5)), 0.5, 1e-12, "encode undoes linearise");
     near (Convert.linearise (Convert.encode (0.5)), 0.5, 1e-12, "linearise undoes encode");
 }
@@ -251,7 +270,10 @@ private void test_ramp () {
     Rgb[] strip = Ramp.build (base_colour);
 
     check (strip.length == 11, "the strip is eleven swatches");
-    same (Convert.to_hex (strip[Ramp.MIDDLE]), "#A1B2C3", "the picked colour is in the middle");
+    /* Indexed literally, not via Ramp.MIDDLE: using the constant to check
+     * itself cannot detect an off-by-one in the constant. */
+    same (Convert.to_hex (strip[5]), "#A1B2C3", "the picked colour is at index 5");
+    check (Ramp.MIDDLE == 5, "the middle constant is 5");
 
     /* Lightness rises monotonically across the strip. */
     bool rising = true;
@@ -278,7 +300,11 @@ private void test_ramp () {
             continue;
         }
         Lch s = Convert.to_oklch (strip[i]);
-        if (s.c > 1e-6 && Math.fabs (s.h - base_hue) > 1.0) {
+        double delta = Math.fabs (s.h - base_hue);
+        if (delta > 180.0) {
+            delta = 360.0 - delta;   /* the short way round the wheel */
+        }
+        if (s.c > 1e-6 && delta > 1.0) {
             hue_held = false;
         }
     }
@@ -350,9 +376,15 @@ private void test_colour () {
     check (c.red == 161 && c.green == 178 && c.blue == 195, "Colour reports byte channels");
     near (c.luminance, 0.4336, 1e-3, "Colour luminance");
 
-    /* Asking twice must give the same answer: the lazy caches must not drift. */
-    near (c.luminance, c.luminance, 0.0, "luminance is stable across calls");
-    same (c.hex, c.hex, "hex is stable across calls");
+    /* Comparing a getter to itself passes for any stale or mis-keyed cache.
+     * Compare against a freshly computed value instead, and read the getters
+     * in an interleaved order so a cache keyed onto the wrong flag shows up. */
+    near (c.luminance, Convert.luminance (c.rgb), 1e-12, "cached luminance matches a fresh one");
+    var fresh = Colour.from_hex ("#A1B2C3");
+    check (fresh.oklch.h == c.oklch.h, "OKLCH hue is cached independently of LCH");
+    near (c.lch.l, Convert.to_lch (c.rgb).l, 1e-12, "cached LCH matches a fresh one");
+    near (c.oklch.c, Convert.to_oklch (c.rgb).c, 1e-12, "cached OKLCH matches a fresh one");
+    same (c.hex, Convert.to_hex (c.rgb), "cached hex matches a fresh one");
 
     check (Colour.from_hex ("nonsense") == null, "Colour rejects a bad string");
 
@@ -394,7 +426,11 @@ private void test_rows () {
 
     /* Black is the row set most likely to produce -0.00 or NaN. */
     var black = Colour.from_hex ("#000000");
-    same (black.row_value (8),  "lab(0.00 0.00 0.00)",      "black LAB has no negative zero");
+    same (black.row_value (8),  "lab(0.00 0.00 0.00)",      "black LAB is all zeroes");
+    /* Black has a* and b* of exactly +0.0, so it cannot catch a missing
+     * negative-zero fold. This one has a a* that rounds to zero from below. */
+    same (Colour.from_hex ("#003C65").row_value (8), "lab(24.23 0.00 -28.88)",
+          "a negative a* that rounds to zero prints as 0.00, not -0.00");
     same (black.row_value (11), "0.0000",                   "black luminance");
     same (black.row_value (6),  "cmyk(0%, 0%, 0%, 100%)",   "black CMYK");
 }
@@ -540,6 +576,79 @@ source = "portal"
     check (Export.render (history, "PALETTE.CSS").has_prefix (":root"), "the suffix test is case insensitive");
 }
 
+/* --- 15. regressions found by audit -------------------------------------- */
+
+private void test_regressions () {
+    section ("regressions");
+
+    /* An achromatic colour has no hue. The published matrices do not sum to
+     * exactly 1, so a grey lands a hair off the neutral axis and atan2 used to
+     * turn that residue into a confident, meaningless angle printed next to a
+     * chroma of 0.00. */
+    same (Colour.from_hex ("#FFFFFF").row_value (9),  "lch(100.00 0.00 0.0)",
+          "white has no LCH hue");
+    same (Colour.from_hex ("#FFFFFF").row_value (10), "oklch(1.000 0.000 0.0)",
+          "white has no OKLCH hue");
+    same (Colour.from_hex ("#808080").row_value (10), "oklch(0.600 0.000 0.0)",
+          "mid grey has no OKLCH hue");
+    near (Convert.to_lch (hex ("#404040")).h, 0.0, 1e-12, "a dark grey has hue 0");
+
+    /* Hue is normalised to [0,360) and then rounded, and rounding could push
+     * it back to 360 — the same angle as 0, printed as though it were not. */
+    same (Colour.from_hex ("#FF0001").row_value (3), "hsl(0, 100%, 50%)",
+          "a hue that rounds up wraps to 0, not 360");
+    same (Colour.from_hex ("#FF0001").row_value (4), "hsv(0, 100%, 100%)",
+          "HSV hue wraps too");
+    same (Colour.from_hex ("#FF0001").row_value (5), "hwb(0 0% 0%)",
+          "HWB hue wraps too");
+    check (!Colour.from_hex ("#200B12").row_value (9).contains ("360.0"),
+           "LCH hue never prints 360");
+    check (!Colour.from_hex ("#251218").row_value (10).contains ("360.0"),
+           "OKLCH hue never prints 360");
+
+    /* K at 100% means "no ink but black", so it must not sit beside a nonzero
+     * cyan. Only a colour whose K is exactly 1 may print 100%. */
+    same (Colour.from_hex ("#000001").row_value (6), "cmyk(100%, 100%, 0%, 99%)",
+          "a near-black does not claim K of 100%");
+    same (Colour.from_hex ("#000000").row_value (6), "cmyk(0%, 0%, 0%, 100%)",
+          "true black does claim K of 100%");
+
+    /* A non-finite channel used to cast to INT_MIN and escape into every row,
+     * including the hex written to the history file. */
+    check (!Convert.is_valid ({ double.NAN, 0.5, 0.5 }), "NaN is not a valid channel");
+    check (!Convert.is_valid ({ 1.4, 0.5, 0.5 }), "above 1 is not a valid channel");
+    check (!Convert.is_valid ({ -0.2, 0.5, 0.5 }), "below 0 is not a valid channel");
+    check (Convert.is_valid ({ 0.0, 0.5, 1.0 }), "the closed unit range is valid");
+
+    var poisoned = new Colour ({ double.NAN, -0.2, 1.4 });
+    check (poisoned.hex.length == 7, "a poisoned colour still yields a 7 character hex");
+    check (poisoned.row_value (1) == "rgb(0, 0, 255)", "a poisoned colour clamps to bytes");
+    check (Convert.to_byte (double.NAN) == 0, "NaN converts to byte 0");
+    check (Convert.to_byte (2.0) == 255, "an over-range double clamps to 255");
+    check (Convert.to_byte (-1.0) == 0, "an under-range double clamps to 0");
+
+    /* Contrast must not turn a NaN luminance into a plausible 1.00 ratio. */
+    check (Contrast.ratio (double.NAN, 1.0).is_nan (), "NaN propagates through contrast");
+    check (Contrast.ratio (1.0, double.NAN).is_nan (), "NaN propagates whichever side it is on");
+
+    /* The ramp at the extremes: black and white have nowhere to go in one
+     * direction, which must not produce a short strip or a NaN. */
+    Rgb[] from_black = Ramp.build (hex ("#000000"));
+    check (from_black.length == 11, "a ramp from black is still eleven swatches");
+    same (Convert.to_hex (from_black[0]), "#000000", "shades of black are black");
+    check (Convert.to_hex (from_black[10]) != "#000000", "tints of black are not black");
+
+    Rgb[] from_white = Ramp.build (hex ("#FFFFFF"));
+    check (from_white.length == 11, "a ramp from white is still eleven swatches");
+    same (Convert.to_hex (from_white[10]), "#FFFFFF", "tints of white are white");
+    check (Convert.to_hex (from_white[0]) != "#FFFFFF", "shades of white are not white");
+
+    /* Out-of-range row indices must not read past the label table. */
+    same (Colour.row_label (14), "", "a row index past the end has no label");
+    same (Colour.row_label (-1), "", "a negative row index has no label");
+    same (Colour.from_hex ("#A1B2C3").row_value (14), "", "a row index past the end has no value");
+}
+
 public static int main (string[] args) {
     /* History reads XDG_CONFIG_HOME through GLib, which caches on first use,
      * so it has to be redirected before anything else touches it. */
@@ -561,6 +670,7 @@ public static int main (string[] args) {
     test_rows ();
     test_history ();
     test_export ();
+    test_regressions ();
 
     stdout.printf ("\n%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;

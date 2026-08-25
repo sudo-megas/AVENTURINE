@@ -17,10 +17,19 @@ namespace Aventurine {
         public const double AAA_NORMAL = 7.0;
         public const double AAA_LARGE  = 4.5;
 
-        /* Both arguments are relative luminance per CORE.md section 8.2. */
+        /* Both arguments are relative luminance per CORE.md section 8.2.
+         *
+         * double.max and double.min compile to the C MAX/MIN ternaries, which
+         * are NaN-asymmetric: MAX(NaN, 1.0) is 1.0 but MAX(1.0, NaN) is NaN, so
+         * argument order alone would decide whether a bad luminance surfaced as
+         * a plausible 1.00:1 or as nan. Ordered explicitly here so a non-finite
+         * input propagates instead of masquerading as a real result. */
         public double ratio (double a, double b) {
-            double hi = double.max (a, b);
-            double lo = double.min (a, b);
+            if (a.is_nan () || b.is_nan ()) {
+                return double.NAN;
+            }
+            double hi = a > b ? a : b;
+            double lo = a > b ? b : a;
             return (hi + 0.05) / (lo + 0.05);
         }
 

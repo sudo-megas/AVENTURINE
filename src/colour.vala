@@ -201,6 +201,9 @@ namespace Aventurine {
         };
 
         public static string row_label (int index) {
+            if (index < 0 || index >= ROW_COUNT) {
+                return "";
+            }
             return ROW_LABELS[index];
         }
 
@@ -212,8 +215,28 @@ namespace Aventurine {
             return r == 0.0 ? 0.0 : r;
         }
 
+        /* Rounds to a whole percent, but never reports 0% or 100% for a value
+         * that is not actually at the limit. Without this, a K of 0.99608
+         * prints as 100% next to a nonzero cyan, which reads as "pure black,
+         * with ink" and is nonsense. */
         private static int pct (double v) {
-            return (int) Math.round (v * 100.0);
+            int p = (int) Math.round (v * 100.0);
+            if (p >= 100 && v < 1.0) return 99;
+            if (p <= 0 && v > 0.0) return 1;
+            return p;
+        }
+
+        /* Hue is normalised to [0, 360) before rounding, but rounding can push
+         * it straight back to 360. Wrap again afterwards so the value never
+         * prints as 360, which is the same angle as 0. */
+        private static double tidy_hue (double h, int decimals) {
+            double r = tidy (h, decimals);
+            return r >= 360.0 ? 0.0 : r;
+        }
+
+        private static int pct_hue (double h) {
+            int r = (int) Math.round (h);
+            return r >= 360 ? 0 : r;
         }
 
         public string row_value (int index) {
@@ -227,13 +250,13 @@ namespace Aventurine {
                         tidy (rgb.r * 100.0, 1), tidy (rgb.g * 100.0, 1), tidy (rgb.b * 100.0, 1));
                 case 3:
                     return "hsl(%d, %d%%, %d%%)".printf (
-                        (int) Math.round (hsl.h), pct (hsl.s), pct (hsl.l));
+                        pct_hue (hsl.h), pct (hsl.s), pct (hsl.l));
                 case 4:
                     return "hsv(%d, %d%%, %d%%)".printf (
-                        (int) Math.round (hsv.h), pct (hsv.s), pct (hsv.v));
+                        pct_hue (hsv.h), pct (hsv.s), pct (hsv.v));
                 case 5:
                     return "hwb(%d %d%% %d%%)".printf (
-                        (int) Math.round (hwb.h), pct (hwb.w), pct (hwb.b));
+                        pct_hue (hwb.h), pct (hwb.w), pct (hwb.b));
                 case 6:
                     return "cmyk(%d%%, %d%%, %d%%, %d%%)".printf (
                         pct (cmyk.c), pct (cmyk.m), pct (cmyk.y), pct (cmyk.k));
@@ -245,10 +268,10 @@ namespace Aventurine {
                         tidy (lab.l, 2), tidy (lab.a, 2), tidy (lab.b, 2));
                 case 9:
                     return "lch(%.2f %.2f %.1f)".printf (
-                        tidy (lch.l, 2), tidy (lch.c, 2), tidy (lch.h, 1));
+                        tidy (lch.l, 2), tidy (lch.c, 2), tidy_hue (lch.h, 1));
                 case 10:
                     return "oklch(%.3f %.3f %.1f)".printf (
-                        tidy (oklch.l, 3), tidy (oklch.c, 3), tidy (oklch.h, 1));
+                        tidy (oklch.l, 3), tidy (oklch.c, 3), tidy_hue (oklch.h, 1));
                 case 11:
                     return "%.4f".printf (tidy (luminance, 4));
                 case 12:

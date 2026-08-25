@@ -83,9 +83,21 @@ namespace Aventurine {
             };
         }
 
+        /* Below this chroma a colour is achromatic and has no hue. The
+         * published matrices do not sum to exactly one, so a neutral grey
+         * lands a hair off the a=b=0 axis; atan2 turns that residue into a
+         * stable but entirely meaningless angle. Every value under this
+         * threshold prints as chroma 0.00 anyway, so reporting hue 0 with it
+         * is the honest answer rather than a rounding artefact. */
+        public const double ACHROMATIC = 1e-4;
+
         /* Shared polar form for both LAB and OKLab. */
         private void to_polar (double a, double b, out double chroma, out double hue) {
             chroma = Math.sqrt (a * a + b * b);
+            if (chroma < ACHROMATIC) {
+                hue = 0.0;
+                return;
+            }
             hue = Math.atan2 (b, a) * 180.0 / Math.PI;
             if (hue < 0.0) {
                 hue += 360.0;
@@ -157,9 +169,23 @@ namespace Aventurine {
         }
 
         public double clamp01 (double v) {
+            /* NaN fails both comparisons below, so it has to be caught first
+             * or it reaches to_byte() and casts to INT_MIN. */
+            if (v.is_nan ()) return 0.0;
             if (v < 0.0) return 0.0;
             if (v > 1.0) return 1.0;
             return v;
+        }
+
+        /* True when every channel is a real number in 0..1, which is the
+         * contract CORE.md section 8 states for the canonical representation.
+         * Used to reject nonsense from a backend before it reaches the UI. */
+        public bool is_valid (Rgb c) {
+            return in_unit (c.r) && in_unit (c.g) && in_unit (c.b);
+        }
+
+        private bool in_unit (double v) {
+            return !v.is_nan () && v.is_infinity () == 0 && v >= 0.0 && v <= 1.0;
         }
 
         /* --- 8.6 the remaining spaces ----------------------------------- */
@@ -235,6 +261,10 @@ namespace Aventurine {
 
         public int to_byte (double v) {
             int b = (int) Math.round (clamp01 (v) * 255.0);
+            /* clamp01 already bounds the input, but the cast is the last place
+             * a surprise could escape into a hex string. */
+            if (b < 0) return 0;
+            if (b > 255) return 255;
             return b;
         }
 

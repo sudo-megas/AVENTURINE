@@ -299,6 +299,17 @@ namespace Aventurine {
                 colour.get_child_value (1).get_double (),
                 colour.get_child_value (2).get_double ()
             };
+
+            /* CORE.md section 8 states the contract: three doubles in 0..1.
+             * A portal that sends NaN or an out-of-range channel is refused
+             * here rather than allowed to reach the conversions, where a
+             * non-finite value turns into nonsense in every row at once. */
+            if (!Convert.is_valid (picked)) {
+                complete (null, new IOError.INVALID_DATA (
+                    "the portal returned a colour outside 0..1"));
+                return;
+            }
+
             complete (picked, null);
         }
 

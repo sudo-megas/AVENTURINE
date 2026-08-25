@@ -7,8 +7,11 @@
  *
  * Display goes through Cairo with nearest-neighbour filtering, so a magnified
  * pixel is the pixel that gets picked. The click coordinate arrives in the
- * widget's logical coordinates and is mapped back through the fit scale before
- * indexing the pixbuf, which is what keeps picks correct on a scaled display.
+ * widget's logical coordinates and is mapped back through the fit transform —
+ * the scale and centring offsets this widget chose — before indexing the
+ * pixbuf. The display's own scale factor never enters the arithmetic: GDK
+ * reports both the allocation and the pointer in the same logical space, so it
+ * has already cancelled out, and reapplying it would double-count.
  */
 
 namespace Aventurine {
@@ -124,6 +127,14 @@ namespace Aventurine {
             });
         }
 
+        /* close_request is not emitted for a window that is destroyed rather
+         * than closed, and a picker that disappears without resuming pick()
+         * would leave the caller suspended forever with its busy flag set. */
+        public override void dispose () {
+            finish ();
+            base.dispose ();
+        }
+
         public void set_resume (owned SourceFunc callback) {
             resume = (owned) callback;
         }
@@ -220,6 +231,25 @@ namespace Aventurine {
 
         /* --- drawing ---------------------------------------------------- */
 
+        /* Contain, never crop. Small images are magnified so single pixels stay
+         * clickable. Recomputed from the allocation on demand rather than left
+         * over from the last draw, so a click that arrives before the first
+         * frame of a newly loaded image still maps through that image's
+         * transform and not the previous one's. */
+        private void fit_transform (int width, int height) {
+            if (pixbuf == null) {
+                scale = 1.0;
+                off_x = 0.0;
+                off_y = 0.0;
+                return;
+            }
+            double iw = pixbuf.get_width ();
+            double ih = pixbuf.get_height ();
+            scale = double.min (width / iw, height / ih);
+            off_x = (width - iw * scale) / 2.0;
+            off_y = (height - ih * scale) / 2.0;
+        }
+
         private void draw (Gtk.DrawingArea widget, Cairo.Context cr, int width, int height) {
             if (pixbuf == null) {
                 return;
@@ -227,12 +257,7 @@ namespace Aventurine {
 
             double iw = pixbuf.get_width ();
             double ih = pixbuf.get_height ();
-
-            /* Contain, never crop. Small images are magnified so single pixels
-             * stay clickable. */
-            scale = double.min (width / iw, height / ih);
-            off_x = (width - iw * scale) / 2.0;
-            off_y = (height - ih * scale) / 2.0;
+            fit_transform (width, height);
 
             cr.save ();
             cr.translate (off_x, off_y);
@@ -252,7 +277,11 @@ namespace Aventurine {
         private bool locate (double x, double y, out int px, out int py) {
             px = 0;
             py = 0;
-            if (pixbuf == null || scale <= 0.0) {
+            if (pixbuf == null) {
+                return false;
+            }
+            fit_transform (area.get_width (), area.get_height ());
+            if (scale <= 0.0) {
                 return false;
             }
             px = (int) Math.floor ((x - off_x) / scale);

@@ -213,15 +213,22 @@ namespace Aventurine {
             this.append (remove_button);
 
             var motion = new Gtk.EventControllerMotion ();
-            motion.enter.connect ((x, y) => {
-                remove_button.opacity = 1.0;
-                remove_button.sensitive = true;
-            });
-            motion.leave.connect (() => {
-                remove_button.opacity = 0.0;
-                remove_button.sensitive = false;
-            });
+            motion.enter.connect ((x, y) => { reveal (true); });
+            motion.leave.connect (() => { reveal (false); });
             this.add_controller (motion);
+
+            /* Hover is not the only way to reach a row. Revealing on focus too
+             * keeps the delete control usable from the keyboard, where an
+             * insensitive button would be skipped in the tab order entirely. */
+            var focus = new Gtk.EventControllerFocus ();
+            focus.enter.connect (() => { reveal (true); });
+            focus.leave.connect (() => { reveal (false); });
+            this.add_controller (focus);
+        }
+
+        private void reveal (bool shown) {
+            remove_button.opacity = shown ? 1.0 : 0.0;
+            remove_button.sensitive = shown;
         }
     }
 
@@ -287,6 +294,18 @@ namespace Aventurine {
             install_actions ();
             show_empty_state ();
             update_backend_hints ();
+
+            /* A portal that was still starting when the window opened would
+             * otherwise leave the button reading "Pick from an image" until
+             * the first press discovered otherwise. Re-checking when the
+             * window becomes active corrects the label before it can mislead. */
+            this.notify["is-active"].connect (() => {
+                if (this.is_active && app.ladder.selected () != null
+                    && app.ladder.selected ().id != "portal") {
+                    app.ladder.reprobe ();
+                    update_backend_hints ();
+                }
+            });
         }
 
         /* --- chrome ------------------------------------------------------ */
@@ -428,7 +447,19 @@ namespace Aventurine {
 
                 int captured = i;
                 var click = new Gtk.GestureClick ();
-                click.released.connect (() => { copy_ramp (captured); });
+                /* Only a release still inside the swatch counts. GestureClick
+                 * reports a release wherever it happens, so without this a
+                 * press dragged off the strip and let go still copied — and
+                 * CORE.md section 14 is explicit that nothing reaches the
+                 * clipboard without a click. Every other clickable here is a
+                 * GtkButton, which cancels on release-outside by itself. */
+                click.released.connect ((n_press, x, y) => {
+                    if (x < 0 || y < 0
+                        || x > swatch.get_width () || y > swatch.get_height ()) {
+                        return;
+                    }
+                    copy_ramp (captured);
+                });
                 swatch.add_controller (click);
 
                 ramp_swatches[i] = swatch;
@@ -569,15 +600,39 @@ namespace Aventurine {
             about.activate.connect (() => { show_about (); });
             this.add_action (about);
 
-            app.set_accels_for_action ("win.pick", { "space", "<Control>p" });
+            /* Ctrl+P is a plain accelerator. Space is not: accelerators run
+             * before the focused widget sees the key, so registering Space
+             * here took it away from every button in the window — tabbing to a
+             * format row and pressing Space started a pick instead of copying
+             * the row. It is handled in the bubble phase below instead, which
+             * fires only once the focused widget has declined it. */
+            app.set_accels_for_action ("win.pick", { "<Control>p" });
             app.set_accels_for_action ("win.copy-hex", { "<Control>c" });
             app.set_accels_for_action ("win.close", { "Escape" });
             app.set_accels_for_action ("win.export", { "<Control>e" });
             app.set_accels_for_action ("win.clear-history", { "<Control><Shift>c" });
+            /* Both the top row and the keypad, so the shortcut works on a
+             * full-size keyboard with NumLock on. */
             for (int i = 1; i <= 9; i++) {
                 app.set_accels_for_action (
-                    "win.copy-row(%d)".printf (i), { "%d".printf (i) });
+                    "win.copy-row(%d)".printf (i),
+                    { "%d".printf (i), "KP_%d".printf (i) });
             }
+
+            /* CORE.md section 16 gives Space to Pick. Bubble phase, so a
+             * focused button still gets Space first and activates normally. */
+            var space = new Gtk.EventControllerKey ();
+            space.set_propagation_phase (Gtk.PropagationPhase.BUBBLE);
+            space.key_pressed.connect ((keyval, keycode, state) => {
+                if (keyval == Gdk.Key.space
+                    && (state & Gdk.ModifierType.CONTROL_MASK) == 0
+                    && (state & Gdk.ModifierType.ALT_MASK) == 0) {
+                    start_pick.begin ();
+                    return true;
+                }
+                return false;
+            });
+            ((Gtk.Widget) this).add_controller (space);
         }
 
         private async void run_export () {

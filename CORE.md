@@ -190,7 +190,7 @@ The request path is constructed, not returned:
 
 Open a PNG or JPEG, or paste an image from the clipboard, and pick a pixel from it. No platform interface involved, so `probe()` always returns `true`. This guarantees the app is never completely useless, and it is genuinely useful on its own — pulling a colour out of a screenshot or a photograph.
 
-Implemented with `Gdk.Texture` for display and `GdkPixbuf` for pixel access. The click coordinate is mapped back through the display scale factor to source pixels before reading.
+Implemented with Cairo for display, at nearest-neighbour filtering so a magnified pixel is the pixel that gets picked, and `GdkPixbuf` for pixel access. The click coordinate is mapped back to source pixels through the widget's own fit transform — its scale and centring offsets — before reading. The display's scale factor does not appear in that arithmetic: GDK reports the allocation and the pointer in the same logical space, so it has already cancelled out.
 
 ### 6.3 Layers held for later
 

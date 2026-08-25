@@ -20,6 +20,13 @@ TEST_SRC = tests/convert-test.vala \
            src/ramp.vala src/names.vala src/history.vala src/export.vala
 TEST_PKGS = --pkg gtk4 --pkg gio-2.0 --pkg posix
 
+# The portal backend is pure GIO, so it can be tested headlessly against a mock
+# portal on a private session bus. No display and no desktop are involved.
+PORTAL_SRC = tests/portal-test.vala \
+             src/colour.vala src/convert.vala src/names.vala \
+             src/source/colour-source.vala src/source/portal-source.vala
+PORTAL_PKGS = --pkg gio-2.0
+
 all: aventurine
 
 aventurine: $(SRC)
@@ -33,6 +40,16 @@ test: convert-test
 
 convert-test: $(TEST_SRC)
 	$(VALAC) $(TEST_PKGS) $(FLAGS) -o convert-test $(TEST_SRC)
+
+mock-portal: tests/mock-portal.vala
+	$(VALAC) --pkg gio-2.0 $(FLAGS) -o mock-portal tests/mock-portal.vala
+
+portal-test: $(PORTAL_SRC)
+	$(VALAC) $(PORTAL_PKGS) $(FLAGS) -o portal-test $(PORTAL_SRC)
+
+# Needs dbus-run-session and gdbus, both from the dbus package.
+test-portal: mock-portal portal-test
+	@sh tests/run-portal-test.sh
 
 install: aventurine
 	install -Dm755 aventurine $(DESTDIR)$(PREFIX)/bin/aventurine
@@ -51,6 +68,6 @@ uninstall:
 	rmdir --ignore-fail-on-non-empty $(DESTDIR)$(PREFIX)/share/licenses/aventurine 2>/dev/null || true
 
 clean:
-	rm -f aventurine convert-test
+	rm -f aventurine convert-test mock-portal portal-test
 
-.PHONY: all run test install uninstall clean
+.PHONY: all run test test-portal install uninstall clean

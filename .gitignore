@@ -1,6 +1,8 @@
 # build products
 aventurine
 convert-test
+mock-portal
+portal-test
 *.o
 *.c
 *.h

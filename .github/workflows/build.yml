@@ -12,10 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     steps:
-      - run: pacman -Syu --noconfirm vala gtk4 glib2 pkgconf git
+      - run: pacman -Syu --noconfirm vala gtk4 glib2 pkgconf git dbus
       - uses: actions/checkout@v4
       - run: make
       - run: make test
+      # Exercises the portal backend against a mock portal on a private
+      # session bus. No display and no real desktop involved.
+      - run: make test-portal
 
   arch:
     needs: build

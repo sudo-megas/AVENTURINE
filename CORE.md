@@ -108,7 +108,10 @@ AVENTURINE/
 │   ├── io.github.sudomegas.aventurine.svg
 │   └── style.css
 ├── tests/
-│   └── convert-test.vala
+│   ├── convert-test.vala
+│   ├── portal-test.vala
+│   ├── mock-portal.vala
+│   └── run-portal-test.sh
 ├── packaging/
 │   ├── arch/PKGBUILD
 │   └── debian/

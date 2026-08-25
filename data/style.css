@@ -1,0 +1,81 @@
+/* Only the rules GTK's own defaults do not already give us.
+ * CORE.md section 15: there is no theme toggle and no settings window, so
+ * everything here has to read correctly in both light and dark. Colours are
+ * therefore expressed as translucent tints over whatever the theme provides,
+ * never as fixed foregrounds. */
+
+/* The hex printed over the header swatch. Black or white is chosen in code by
+ * relative luminance, per CORE.md section 14. */
+.header-hex {
+  font-family: monospace;
+  font-size: 2.1em;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.header-hex.on-light { color: #000000; }
+.header-hex.on-dark  { color: #ffffff; }
+
+.header-hex.placeholder {
+  font-size: 1.1em;
+  font-weight: normal;
+  letter-spacing: 0;
+  opacity: 0.55;
+}
+
+.pick-button {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-weight: bold;
+}
+
+/* Format and history rows sit tighter than a default button. */
+.format-row {
+  padding: 4px 8px;
+  min-height: 0;
+}
+
+.format-value {
+  font-family: monospace;
+}
+
+.section-title {
+  font-size: 0.78em;
+  font-weight: bold;
+  letter-spacing: 1px;
+  opacity: 0.55;
+}
+
+/* WCAG verdicts. The tint distinguishes them at a glance; the tick and cross
+ * in the label carry the same information without relying on colour. */
+.badge {
+  font-size: 0.72em;
+  font-weight: bold;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.badge-pass { background-color: alpha(#2ec27e, 0.30); }
+.badge-fail { background-color: alpha(#e01b24, 0.22); }
+
+/* No screen-capture backend answered. */
+.banner {
+  background-color: alpha(#e5a50a, 0.28);
+}
+
+.toast {
+  background-color: alpha(#000000, 0.82);
+  color: #ffffff;
+  border-radius: 999px;
+}
+
+.about-value {
+  font-family: monospace;
+  font-size: 0.92em;
+}
+
+.licence-view {
+  border: 1px solid alpha(currentColor, 0.18);
+  border-radius: 6px;
+  font-size: 0.85em;
+}

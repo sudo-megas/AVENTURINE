@@ -316,19 +316,22 @@ Fourteen rows, in this order. Each is a label, a monospace value, and a copy aff
 | 1 | HEX | `#A1B2C3` |
 | 2 | RGB | `rgb(161, 178, 195)` |
 | 3 | RGB percent | `rgb(63.1%, 69.8%, 76.5%)` |
-| 4 | HSL | `hsl(210, 20%, 70%)` |
+| 4 | HSL | `hsl(210, 22%, 70%)` |
 | 5 | HSV | `hsv(210, 17%, 76%)` |
 | 6 | HWB | `hwb(210 63% 24%)` |
 | 7 | CMYK | `cmyk(17%, 9%, 0%, 24%)` |
-| 8 | Linear RGB | `0.362 0.444 0.535` |
-| 9 | LAB | `lab(72.05 -2.14 -8.93)` |
-| 10 | LCH | `lch(72.05 9.18 256.5)` |
-| 11 | OKLCH | `oklch(0.745 0.024 250.1)` |
-| 12 | Relative luminance | `0.4293` |
-| 13 | Nearest CSS name | `lightsteelblue` |
+| 8 | Linear RGB | `0.356 0.445 0.546` |
+| 9 | LAB | `lab(71.80 -2.29 -10.62)` |
+| 10 | LCH | `lch(71.80 10.86 257.8)` |
+| 11 | OKLCH | `oklch(0.756 0.031 248.2)` |
+| 12 | Relative luminance | `0.4336` |
+| 13 | Nearest CSS name | `darkgray` |
 | 14 | Nearest xkcd name | `light grey blue` |
 
-Hex is **uppercase**. Precision: HSL, HSV, HWB and CMYK are integers; LAB, LCH and OKLCH carry two, two and three decimals respectively; linear RGB three; luminance four.
+Hex is **uppercase**. Precision: HSL, HSV, HWB and CMYK are integers; LAB, LCH and OKLCH carry two, two and three decimals respectively; linear RGB three; luminance four. Hue carries one decimal in LCH and OKLCH.
+
+> [!NOTE]
+> The example column above is computed by the formulas in section 8 and is pinned by `tests/convert-test.vala`. An earlier draft of this table carried hand-worked values for rows 4, 8, 9, 10, 11, 12 and 13 that section 8 does not produce; they were corrected against the formulas rather than the formulas against them. Row 13 is `darkgray` because `#A9A9A9` really is nearer to `#A1B2C3` than `#B0C4DE` is under plain Euclidean distance in OKLab — a chroma-weighted metric would answer `lightsteelblue`, and that is a candidate for a later version, not a v1.0 change.
 
 Nearest-name matching runs in OKLab with plain Euclidean distance, which is close enough to perceptual for a name label and far better than distance in sRGB.
 

@@ -103,6 +103,7 @@ AVENTURINE/
 │       ├── portal-source.vala
 │       └── image-source.vala
 ├── data/
+│   ├── banner.svg
 │   ├── io.github.sudomegas.aventurine.desktop
 │   ├── io.github.sudomegas.aventurine.svg
 │   └── style.css

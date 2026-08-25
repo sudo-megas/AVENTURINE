@@ -77,8 +77,9 @@ namespace Aventurine {
             return cached;
         }
 
-        /* Called when a pick fails, so a backend that has gone away is not
-         * used again for the rest of the session. */
+        /* Drops the cached winner so the next selected() probes the ladder
+         * again. It does not blacklist anything: a rung that still probes
+         * clean is chosen again, which is what CORE.md section 5 asks for. */
         public void reprobe () {
             probed = false;
             cached = null;
@@ -139,6 +140,12 @@ environment:
     }
 
     public static int main (string[] args) {
+        /* POSIX allows argc to be 0, in which case there is no argv[0] to
+         * read and nothing to hand to GApplication. */
+        if (args.length < 1) {
+            return 2;
+        }
+
         for (int i = 1; i < args.length; i++) {
             switch (args[i]) {
                 case "--doctor":

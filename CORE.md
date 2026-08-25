@@ -74,7 +74,10 @@ Runtime dependencies, complete:
 
 Build-time only: `vala`, `pkgconf`, `make`, `gcc`.
 
-That is two runtime libraries, both of which are already present on any system running a GTK application. There is deliberately no `libportal` — the two D-Bus calls the app makes are short enough to write directly against `GIO`, and adding a library to save forty lines would be a dependency that does no real work.
+That is two runtime libraries, both of which are already present on any system running a GTK application.
+
+> [!NOTE]
+> "Two dependencies" is a statement about what the project chose to depend on, not about the ELF link list. The binary also links `libcairo` and `libgdk-pixbuf`, because it draws swatches with Cairo and reads image pixels through GdkPixbuf — both of which arrive inside the GTK stack rather than being separate choices. A package's `Depends:` is a different question from a project's dependency list, and it has to name what is actually linked, so both are declared in `packaging/`. There is deliberately no `libportal` — the two D-Bus calls the app makes are short enough to write directly against `GIO`, and adding a library to save forty lines would be a dependency that does no real work.
 
 ## 4. Repository layout
 

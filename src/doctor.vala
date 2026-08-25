@@ -22,15 +22,23 @@ namespace Aventurine {
             string session = Environment.get_variable ("XDG_SESSION_TYPE") ?? "unknown";
             row ("session type", session);
 
+            /* Asked once and reused across every row below. Probing separately
+             * per row let a portal that changed state mid-command print rows
+             * that contradicted each other — "Screenshot unavailable" directly
+             * above "portal ok" — which is the opposite of what a diagnostic
+             * is for. */
             var portal = ladder.portal;
-            row ("portal owner", "%s %s".printf (PortalSource.BUS_NAME,
-                                                 portal.owner_present () ? "present" : "absent"));
+            bool owned = portal.owner_present ();
+            uint32 version = owned ? portal.screenshot_version () : 0;
+            bool portal_ok = owned && version > 0;
 
-            uint32 version = portal.screenshot_version ();
+            row ("portal owner", "%s %s".printf (PortalSource.BUS_NAME,
+                                                 owned ? "present" : "absent"));
             row ("Screenshot", version > 0 ? "version %u".printf (version) : "unavailable");
 
             foreach (var source in ladder.sources ()) {
-                row ("  " + source.id, source.probe () ? "ok" : "unavailable");
+                bool ok = source.id == "portal" ? portal_ok : source.probe ();
+                row ("  " + source.id, ok ? "ok" : "unavailable");
             }
 
             /* Only mentioned when it is actually set, so the normal output

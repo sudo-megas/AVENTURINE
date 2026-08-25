@@ -86,8 +86,13 @@ namespace Aventurine {
             File? target;
             try {
                 target = yield dialog.save (parent, null);
-            } catch (Error e) {
-                /* Cancelling arrives here as an error, and is not one. */
+            } catch (Gtk.DialogError e) {
+                /* Dismissing the dialog arrives as an error and is not one.
+                 * A genuine DialogError.FAILED is, and must not be swallowed
+                 * as though the user had simply changed their mind. */
+                if (e is Gtk.DialogError.FAILED) {
+                    throw e;
+                }
                 return null;
             }
             if (target == null) {

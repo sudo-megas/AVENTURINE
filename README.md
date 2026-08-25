@@ -52,6 +52,8 @@ Build-time only: `vala`, `pkgconf`, `make`, `gcc`.
 
 Both runtime libraries are already present on any system that runs a single GTK application, so in practice this installs into an existing desktop with no new libraries at all.
 
+The packages declare two more — `libcairo` and `libgdk-pixbuf` — because the binary links them directly, for drawing swatches and for reading image pixels. They are not additional choices: both arrive inside the GTK stack and are already installed wherever `gtk4` is. What a project depends on and what a package must declare are different questions, and the packaging answers the second one honestly.
+
 ### Why there is no `libportal`
 
 `libportal` is the obvious thing to reach for, and it is deliberately absent.

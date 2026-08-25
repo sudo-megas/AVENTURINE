@@ -477,7 +477,9 @@ namespace Aventurine {
                     copy_text (entry.hex, "history entry");
                 });
                 row.delete_requested.connect (() => {
-                    history.remove_at (captured);
+                    if (!history.remove_at (captured)) {
+                        toast ("Could not write the history file");
+                    }
                 });
                 history_list.append (row);
             }
@@ -611,8 +613,8 @@ namespace Aventurine {
             dialog.choose.begin (this, null, (source, result) => {
                 try {
                     if (dialog.choose.end (result) == 1) {
-                        history.clear ();
-                        toast ("History cleared");
+                        toast (history.clear () ? "History cleared"
+                                                : "Could not write the history file");
                     }
                 } catch (Error e) {
                     /* dismissed */
@@ -647,7 +649,18 @@ namespace Aventurine {
                 return;
             }
 
+            /* The ladder caches its winner for the session. If that winner is
+             * not the portal, re-probe before picking: a portal that was still
+             * starting up when the window opened would otherwise never be
+             * found, and the only other route back to a re-probe is a failed
+             * pick, which the image rung never produces. One NameHasOwner call
+             * is cheap enough to spend per press. */
             var source = app.ladder.selected ();
+            if (source != null && source.id != "portal") {
+                app.ladder.reprobe ();
+                source = app.ladder.selected ();
+                update_backend_hints ();
+            }
             if (source == null) {
                 toast ("No capture backend is available");
                 return;
@@ -708,7 +721,12 @@ namespace Aventurine {
             contrast_section.visible = true;
             ramp_section.visible = true;
 
-            history.add (colour);
+            /* A history that cannot be written is worth saying out loud: the
+             * colour is on screen either way, but it will not be there after a
+             * restart, and silently pretending otherwise loses the user's work. */
+            if (!history.add (colour)) {
+                toast ("Could not write the history file");
+            }
         }
 
         /* CORE.md section 14: before anything is picked the header shows a

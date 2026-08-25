@@ -520,7 +520,12 @@ source = "image"
     write_history_file (big.str);
     var capped = new History ();
     capped.load ();
-    check (capped.size == 130, "load itself does not cap");
+    /* CORE.md section 12 caps the history at 100 with the oldest evicted, and
+     * that is a property of the history, not only of add(). A file holding
+     * more is trimmed on load, keeping the newest. */
+    check (capped.size == History.CAP, "load caps at 100");
+    same (capped.get_at (0).hex, "#000000", "the newest entry survives the load cap");
+    same (capped.get_at (History.CAP - 1).hex, "#000063", "the oldest entries are dropped");
 
     capped.add (Colour.from_hex ("#FFFFFF"));
     check (capped.size == History.CAP, "adding past the cap evicts down to 100");
@@ -531,6 +536,110 @@ source = "image"
     check (capped.size == History.CAP - 1, "removing an entry drops the count");
     capped.clear ();
     check (capped.size == 0, "clear empties the history");
+
+    /* --- value parsing, canonical form and honest failure ---------------- */
+
+    /* A hand-edited file may hold shorthand, a missing hash, or padding. All
+     * three are accepted, and all three are normalised on the way in, so what
+     * reaches the exporters is always #RRGGBB. */
+    write_history_file ("""[[entry]]
+hex = "abc"
+at = ""
+source = "portal"
+
+[[entry]]
+hex = "A1B2C3"
+at = ""
+source = "portal"
+
+[[entry]]
+hex = "  #4e6e5d  "
+at = ""
+source = "portal"
+""");
+    var messy = new History ();
+    messy.load ();
+    check (messy.size == 3, "shorthand, bare and padded hex all load");
+    if (messy.size == 3) {
+        same (messy.get_at (0).hex, "#AABBCC", "shorthand hex is expanded and normalised");
+        same (messy.get_at (1).hex, "#A1B2C3", "a missing hash is added");
+        same (messy.get_at (2).hex, "#4E6E5D", "padding is stripped and case normalised");
+        /* The exporters must never see anything but canonical hex. */
+        check (Export.to_css (messy).contains ("--aventurine-1: #AABBCC;"),
+               "a normalised entry exports as a valid CSS colour");
+    }
+
+    /* An unterminated quoted value used to keep its opening quote and then be
+     * written back out as invalid TOML. The field is skipped instead. */
+    write_history_file ("""[[entry]]
+hex = "#A1B2C3"
+at = "unterminated
+source = "portal"
+""");
+    var broken = new History ();
+    broken.load ();
+    check (broken.size == 1, "an entry with one unreadable field still loads");
+    if (broken.size == 1) {
+        check (!broken.get_at (0).at.has_prefix ("\""),
+               "an unterminated value does not keep its opening quote");
+        check (!broken.to_toml ().contains ("\"\"unterminated"),
+               "an unterminated value is not written back as invalid TOML");
+    }
+
+    /* A trailing comment is not part of the value. */
+    write_history_file ("""[[entry]]
+hex = "#A1B2C3"
+at = ""
+source = "portal" # picked from the wallpaper
+""");
+    var commented = new History ();
+    commented.load ();
+    check (commented.size == 1, "a commented line loads");
+    if (commented.size == 1) {
+        same (commented.get_at (0).source, "portal", "a trailing comment is not part of the value");
+    }
+
+    /* save() must report failure rather than claim success over a file it
+     * could not write. GLib caches the config directory on first use, so the
+     * environment cannot be redirected here; a directory sitting where the
+     * file belongs makes the rename fail instead, which is the same code path.
+     *
+     * This matters more than it looks. puts() on a small write only fills the
+     * stdio buffer, so a full disk reports success there and fails at flush;
+     * ignoring that renamed a truncated file over a good one and returned
+     * true, losing entries with no error anywhere. */
+    FileUtils.remove (History.path ());
+    DirUtils.create_with_parents (History.path (), 0755);
+    var unwritable = new History ();
+    check (!unwritable.save (), "save reports failure when the file cannot be written");
+    check (!unwritable.add (Colour.from_hex ("#FFFFFF")), "add reports a failed write");
+    check (!FileUtils.test (History.path () + ".tmp", FileTest.EXISTS),
+           "a failed save leaves no temporary file behind");
+    DirUtils.remove (History.path ());
+
+    /* --- relative timestamps --------------------------------------------- */
+
+    var now = new DateTime.now_local ();
+    check (new HistoryEntry ("#FFFFFF", now.format ("%Y-%m-%dT%H:%M:%S%:z"), "portal")
+           .relative_time () == "just now", "a fresh entry reads as just now");
+    check (new HistoryEntry ("#FFFFFF", now.add_minutes (-1).format ("%Y-%m-%dT%H:%M:%S%:z"), "portal")
+           .relative_time () == "1 minute ago", "one minute is singular");
+    check (new HistoryEntry ("#FFFFFF", now.add_minutes (-5).format ("%Y-%m-%dT%H:%M:%S%:z"), "portal")
+           .relative_time () == "5 minutes ago", "several minutes are plural");
+    check (new HistoryEntry ("#FFFFFF", now.add_hours (-1).format ("%Y-%m-%dT%H:%M:%S%:z"), "portal")
+           .relative_time () == "1 hour ago", "one hour is singular");
+    check (new HistoryEntry ("#FFFFFF", now.add_days (-1).format ("%Y-%m-%dT%H:%M:%S%:z"), "portal")
+           .relative_time () == "yesterday", "one day reads as yesterday");
+    check (new HistoryEntry ("#FFFFFF", now.add_days (-3).format ("%Y-%m-%dT%H:%M:%S%:z"), "portal")
+           .relative_time () == "3 days ago", "several days are plural");
+    /* Clock skew must not produce a negative age. */
+    check (new HistoryEntry ("#FFFFFF", now.add_hours (1).format ("%Y-%m-%dT%H:%M:%S%:z"), "portal")
+           .relative_time () == "just now", "a future timestamp reads as just now");
+    /* An entry with no usable timestamp must render something, not a blank. */
+    same (new HistoryEntry ("#FFFFFF", "", "portal").relative_time (), "unknown time",
+          "an empty timestamp has a label");
+    same (new HistoryEntry ("#FFFFFF", "not a date", "portal").relative_time (), "not a date",
+          "an unparseable timestamp is shown as written");
 
     /* An absent file is not an error. */
     FileUtils.remove (Path.build_filename (test_config_dir (), "aventurine", "history.toml"));

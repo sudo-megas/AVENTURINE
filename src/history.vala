@@ -30,6 +30,9 @@ namespace Aventurine {
 
         /* "3 minutes ago" and friends, for the history list. */
         public string relative_time () {
+            if (at.strip () == "") {
+                return "unknown time";
+            }
             var when = new DateTime.from_iso8601 (at, null);
             if (when == null) {
                 return at;
@@ -37,9 +40,9 @@ namespace Aventurine {
             var now = new DateTime.now_local ();
             double seconds = now.difference (when) / (double) TimeSpan.SECOND;
 
-            if (seconds < 0) {
-                return "just now";
-            }
+            /* A timestamp in the future reads as now rather than as a negative
+             * age. Clock skew and a config copied between machines both make
+             * them, and neither is worth an error. */
             if (seconds < 60) {
                 return "just now";
             }
@@ -122,7 +125,10 @@ namespace Aventurine {
                 }
 
                 string key = line.substring (0, equals).strip ();
-                string value = unquote (line.substring (equals + 1).strip ());
+                string? value = unquote (line.substring (equals + 1).strip ());
+                if (value == null) {
+                    continue;   /* unreadable value: skip the field, keep the entry */
+                }
 
                 /* First occurrence wins. TOML forbids duplicate keys in a
                  * table, and letting a later one overwrite means a damaged
@@ -148,15 +154,28 @@ namespace Aventurine {
                 }
             }
             commit (ref hex, ref at, ref source);
+
+            /* CORE.md section 12 caps the history at 100 with the oldest
+             * evicted first. A file holding more — hand edited, or written by
+             * some later version — is trimmed here, so the cap holds in the
+             * window too and not only after the next pick. The file itself is
+             * left alone until the user picks something new. */
+            while (items.length > CAP) {
+                items.remove_index (items.length - 1);
+            }
         }
 
         /* Accepts an entry only if the hex actually parses. A row with a broken
          * colour is worse than no row. */
         private void commit (ref string? hex, ref string? at, ref string? source) {
             if (hex != null) {
-                Rgb ignored;
-                if (Convert.parse_hex (hex, out ignored)) {
-                    items.add (new HistoryEntry (hex.up (),
+                Rgb parsed;
+                if (Convert.parse_hex (hex, out parsed)) {
+                    /* Normalised, not stored as written. A hand-edited file may
+                     * hold "abc" or "  #A1B2C3  "; both are valid input, and
+                     * both would otherwise reach the exporters verbatim and
+                     * produce a CSS custom property that is not a colour. */
+                    items.add (new HistoryEntry (Convert.to_hex (parsed),
                                                  at ?? "",
                                                  source ?? "unknown"));
                 }
@@ -166,19 +185,35 @@ namespace Aventurine {
             source = null;
         }
 
-        private static string unquote (string value) {
+        /* Returns null for a value that is not readable, so the caller can
+         * skip the field rather than store something half parsed. */
+        private static string? unquote (string value) {
             string s = value.strip ();
-            /* Strip a trailing inline comment only outside quotes. */
-            if (s.length >= 2 && s.has_prefix ("\"") && s.last_index_of_char ('"') > 0) {
-                int closing = s.last_index_of_char ('"');
+
+            if (s.has_prefix ("\"")) {
+                /* The FIRST closing quote ends the value. Taking the last one
+                 * swallowed any quote inside a trailing comment, and an
+                 * unterminated value kept its opening quote and was written
+                 * back out as invalid TOML. */
+                int closing = s.index_of_char ('"', 1);
+                if (closing < 0) {
+                    return null;
+                }
                 return s.substring (1, closing - 1);
+            }
+
+            /* A bare value may carry a trailing comment. A hash in the first
+             * position is not one: that is how an unquoted hex looks. */
+            int hash = s.index_of_char ('#', 1);
+            if (hash > 0) {
+                s = s.substring (0, hash).strip ();
             }
             return s;
         }
 
         /* --- writing ----------------------------------------------------- */
 
-        public void add (Colour colour) {
+        public bool add (Colour colour) {
             var entry = new HistoryEntry (
                 colour.hex,
                 new DateTime.now_local ().format ("%Y-%m-%dT%H:%M:%S%:z"),
@@ -189,23 +224,26 @@ namespace Aventurine {
                 items.remove_index (items.length - 1);
             }
 
-            save ();
+            bool written = save ();
             changed ();
+            return written;
         }
 
-        public void remove_at (int index) {
+        public bool remove_at (int index) {
             if (index < 0 || index >= items.length) {
-                return;
+                return true;
             }
             items.remove_index (index);
-            save ();
+            bool written = save ();
             changed ();
+            return written;
         }
 
-        public void clear () {
+        public bool clear () {
             items = new GenericArray<HistoryEntry> ();
-            save ();
+            bool written = save ();
             changed ();
+            return written;
         }
 
         public string to_toml () {
@@ -233,14 +271,28 @@ namespace Aventurine {
             if (stream == null) {
                 return false;
             }
-            if (stream.puts (to_toml ()) < 0) {
-                return false;
-            }
-            stream.flush ();
-            Posix.fsync (stream.fileno ());
+
+            /* Every step is checked. puts() on a small write usually only
+             * fills the stdio buffer and reports success even when the disk is
+             * full; the real error does not surface until flush(). Ignoring it
+             * meant renaming a truncated file over a good one and reporting
+             * success, which silently destroyed history entries. */
+            bool ok = stream.puts (to_toml ()) >= 0
+                   && stream.flush () == 0
+                   && Posix.fsync (stream.fileno ()) == 0;
+
+            /* Closes the stream, before the rename either way. */
             stream = null;
 
-            return FileUtils.rename (temporary, target) == 0;
+            if (!ok) {
+                FileUtils.unlink (temporary);
+                return false;
+            }
+            if (FileUtils.rename (temporary, target) != 0) {
+                FileUtils.unlink (temporary);
+                return false;
+            }
+            return true;
         }
     }
 }

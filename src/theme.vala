@@ -25,24 +25,46 @@ namespace Aventurine {
         private DBusConnection? bus = null;
         private uint subscription = 0;
 
+        /* Idempotent, and does not block. Getting the bus and reading the
+         * setting are done asynchronously: this runs from App.startup(), and
+         * a portal that owns its name but answers slowly would otherwise stall
+         * the first frame behind two one-second timeouts. */
         public void start () {
-            try {
-                bus = Bus.get_sync (BusType.SESSION, null);
-            } catch (Error e) {
+            if (bus != null || starting) {
                 return;
             }
+            starting = true;
+            begin_start.begin ();
+        }
 
-            apply (read ());
+        private bool starting = false;
+
+        private async void begin_start () {
+            try {
+                bus = yield Bus.get (BusType.SESSION, null);
+            } catch (Error e) {
+                starting = false;
+                return;
+            }
 
             subscription = bus.signal_subscribe (BUS_NAME, IFACE, "SettingChanged",
                                                  PATH, null, DBusSignalFlags.NONE,
                                                  on_setting_changed);
+            apply (read ());
+            starting = false;
         }
 
-        ~Theme () {
+        /* Not a destructor. signal_subscribe takes an owned delegate, so the
+         * subscription holds a strong reference to this object, which the
+         * destructor could only release by running — which it cannot, because
+         * the reference keeps it alive. That cycle makes ~Theme dead code, so
+         * teardown is explicit and the App calls it on shutdown. */
+        public void stop () {
             if (bus != null && subscription != 0) {
                 bus.signal_unsubscribe (subscription);
+                subscription = 0;
             }
+            bus = null;
         }
 
         /* ReadOne arrived with Settings version 2. Older portals only have
@@ -89,7 +111,10 @@ namespace Aventurine {
                                          string interface_name,
                                          string signal_name,
                                          Variant parameters) {
-            if (parameters.n_children () < 3) {
+            /* Anything that owns the portal name can emit this. Check the
+             * shape before indexing it, or a payload that is not (ssv) turns
+             * into a GLib critical and, under fatal-criticals, an abort. */
+            if (!parameters.is_of_type (new VariantType ("(ssv)"))) {
                 return;
             }
             if (parameters.get_child_value (0).get_string () != NAMESPACE) {
@@ -102,12 +127,18 @@ namespace Aventurine {
         }
 
         private void apply (uint32 scheme) {
+            /* CORE.md section 15: with no preference, fall back to the GTK
+             * default and do nothing clever. Writing false here would clobber
+             * a user who set gtk-application-prefer-dark-theme themselves,
+             * flipping a dark desktop to light on any session whose portal
+             * does not answer. */
+            if (scheme != PREFER_DARK && scheme != PREFER_LIGHT) {
+                return;
+            }
             var settings = Gtk.Settings.get_default ();
             if (settings == null) {
                 return;
             }
-            /* Only "prefer dark" is a positive instruction. No preference and
-             * prefer light both mean: leave the light theme alone. */
             settings.gtk_application_prefer_dark_theme = (scheme == PREFER_DARK);
         }
     }

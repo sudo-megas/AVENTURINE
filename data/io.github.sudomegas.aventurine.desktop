@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Aventurine
+Comment=Pick a colour from the screen
+Exec=aventurine
+Icon=io.github.sudomegas.aventurine
+Terminal=false
+Categories=Graphics;Utility;

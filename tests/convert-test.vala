@@ -399,7 +399,152 @@ private void test_rows () {
     same (black.row_value (6),  "cmyk(0%, 0%, 0%, 100%)",   "black CMYK");
 }
 
+/* --- 13. history ------------------------------------------------------ */
+
+private string test_config_dir () {
+    return Path.build_filename (Environment.get_tmp_dir (), "aventurine-test-config");
+}
+
+private void write_history_file (string contents) {
+    string dir = Path.build_filename (test_config_dir (), "aventurine");
+    DirUtils.create_with_parents (dir, 0755);
+    try {
+        FileUtils.set_contents (Path.build_filename (dir, "history.toml"), contents);
+    } catch (Error e) {
+        failures++;
+        stdout.printf ("  FAIL  could not stage a history file: %s\n", e.message);
+    }
+}
+
+private void test_history () {
+    section ("history");
+
+    /* A file with several kinds of damage in it. What parses is kept, what
+     * does not is skipped, and the app must not treat any of it as fatal. */
+    write_history_file ("""# aventurine history
+this line is not a key/value pair at all
+
+[[entry]]
+hex = "#A1B2C3"
+at = "2026-08-25T14:03:11+03:00"
+source = "portal"
+
+[[entry]]
+hex = "#ZZZZZZ"
+at = "unparseable colour, must be skipped"
+source = "portal"
+
+[[entry]]
+hex = "#4E6E5D"
+at = "2026-08-24T09:12:00+03:00"
+
+[[entry
+hex = "#123456"
+garbage ===== nonsense
+[[entry]]
+hex = "#DEB887"
+at = "2026-08-23T08:00:00+03:00"
+source = "image"
+""");
+
+    var history = new History ();
+    history.load ();
+
+    check (history.size == 3, "three of the five entries survive a malformed file");
+    if (history.size == 3) {
+        same (history.get_at (0).hex, "#A1B2C3", "first surviving entry");
+        same (history.get_at (1).hex, "#4E6E5D", "second surviving entry");
+        same (history.get_at (2).hex, "#DEB887", "third surviving entry");
+        /* A missing source field must not lose the entry. */
+        same (history.get_at (1).source, "unknown", "a missing source becomes unknown");
+        same (history.get_at (0).source, "portal", "the source field is kept");
+    }
+
+    /* The written form must be exactly the schema of CORE.md section 12. */
+    string toml = history.to_toml ();
+    check (toml.contains ("[[entry]]"), "entries are written as [[entry]] tables");
+    check (toml.contains ("hex = \"#A1B2C3\""), "hex is written quoted and uppercase");
+    check (toml.contains ("source = \"portal\""), "source is written");
+
+    /* A save must round trip through the parser unchanged. */
+    check (history.save (), "history saves");
+    var reloaded = new History ();
+    reloaded.load ();
+    check (reloaded.size == 3, "a saved history reloads with the same count");
+    if (reloaded.size == 3) {
+        same (reloaded.get_at (0).hex, "#A1B2C3", "round trip keeps order");
+        same (reloaded.get_at (0).at, "2026-08-25T14:03:11+03:00", "round trip keeps the timestamp");
+    }
+
+    /* The cap evicts oldest first. */
+    var big = new StringBuilder ();
+    for (int i = 0; i < 130; i++) {
+        big.append_printf ("[[entry]]\nhex = \"#%06X\"\nat = \"\"\nsource = \"image\"\n\n", i);
+    }
+    write_history_file (big.str);
+    var capped = new History ();
+    capped.load ();
+    check (capped.size == 130, "load itself does not cap");
+
+    capped.add (Colour.from_hex ("#FFFFFF"));
+    check (capped.size == History.CAP, "adding past the cap evicts down to 100");
+    same (capped.get_at (0).hex, "#FFFFFF", "the newest entry is first");
+
+    /* Deleting and clearing. */
+    capped.remove_at (0);
+    check (capped.size == History.CAP - 1, "removing an entry drops the count");
+    capped.clear ();
+    check (capped.size == 0, "clear empties the history");
+
+    /* An absent file is not an error. */
+    FileUtils.remove (Path.build_filename (test_config_dir (), "aventurine", "history.toml"));
+    var fresh = new History ();
+    fresh.load ();
+    check (fresh.size == 0, "a missing history file loads as empty");
+}
+
+/* --- 14. export ------------------------------------------------------- */
+
+private void test_export () {
+    section ("export (CORE.md section 13)");
+
+    write_history_file ("""[[entry]]
+hex = "#A1B2C3"
+at = "2026-08-25T14:03:11+03:00"
+source = "portal"
+
+[[entry]]
+hex = "#4E6E5D"
+at = "2026-08-24T09:12:00+03:00"
+source = "portal"
+""");
+    var history = new History ();
+    history.load ();
+
+    string gpl = Export.to_gpl (history);
+    check (gpl.has_prefix ("GIMP Palette\nName: AVENTURINE\nColumns: 8\n#\n"),
+           "the .gpl header is exactly as specified");
+    check (gpl.contains ("161 178 195\t#A1B2C3"), "a .gpl row is 'r g b<tab>hex'");
+    check (gpl.contains ("#4E6E5D"), "every entry is exported");
+
+    string css = Export.to_css (history);
+    check (css.has_prefix (":root {\n"), "the .css opens with :root");
+    check (css.contains ("  --aventurine-1: #A1B2C3;"), "the first custom property");
+    check (css.contains ("  --aventurine-2: #4E6E5D;"), "the second custom property");
+    check (css.has_suffix ("}\n"), "the .css closes the block");
+
+    /* The suffix picks the format. */
+    check (Export.render (history, "palette.css").has_prefix (":root"), ".css chooses CSS");
+    check (Export.render (history, "palette.gpl").has_prefix ("GIMP"), ".gpl chooses GIMP");
+    check (Export.render (history, "palette").has_prefix ("GIMP"), "no suffix defaults to GIMP");
+    check (Export.render (history, "PALETTE.CSS").has_prefix (":root"), "the suffix test is case insensitive");
+}
+
 public static int main (string[] args) {
+    /* History reads XDG_CONFIG_HOME through GLib, which caches on first use,
+     * so it has to be redirected before anything else touches it. */
+    Environment.set_variable ("XDG_CONFIG_HOME", test_config_dir (), true);
+
     stdout.printf ("aventurine conversion tests\n\n");
 
     test_luminance ();
@@ -414,6 +559,8 @@ public static int main (string[] args) {
     test_names ();
     test_colour ();
     test_rows ();
+    test_history ();
+    test_export ();
 
     stdout.printf ("\n%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;

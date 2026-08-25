@@ -7,16 +7,18 @@ VALAC   ?= valac
 
 APPID = io.github.sudomegas.aventurine
 
-PKGS  = --pkg gtk4 --pkg gio-2.0 --pkg gdk-pixbuf-2.0
+PKGS  = --pkg gtk4 --pkg gio-2.0 --pkg gdk-pixbuf-2.0 --pkg posix
 FLAGS = -X -lm -X -O2 -X -w
 
 SRC = $(wildcard src/*.vala) $(wildcard src/source/*.vala)
 
-# The test binary links only the pure-logic units, so it needs no GTK at all.
+# The test binary links the units that can be exercised without a display.
+# export.vala pulls in GTK for its file dialog, but the formatting functions
+# the tests call never touch it and gtk_init is never reached.
 TEST_SRC = tests/convert-test.vala \
            src/colour.vala src/convert.vala src/contrast.vala \
-           src/ramp.vala src/names.vala
-TEST_PKGS = --pkg gio-2.0
+           src/ramp.vala src/names.vala src/history.vala src/export.vala
+TEST_PKGS = --pkg gtk4 --pkg gio-2.0 --pkg posix
 
 all: aventurine
 

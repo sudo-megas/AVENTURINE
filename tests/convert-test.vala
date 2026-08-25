@@ -762,6 +762,49 @@ private void test_regressions () {
     same (Convert.to_hex (from_white[10]), "#FFFFFF", "tints of white are white");
     check (Convert.to_hex (from_white[0]) != "#FFFFFF", "shades of white are not white");
 
+    /* HWB hue comes from the same hexcone as HSL, but nothing pinned it
+     * directly, so a divergence would only have shown up as a formatted row. */
+    near (Convert.to_hwb (hex ("#FF0000")).h, 0.0, 1e-9, "HWB hue for red");
+    near (Convert.to_hwb (hex ("#00FF00")).h, 120.0, 1e-9, "HWB hue for green");
+    near (Convert.to_hwb (hex ("#0000FF")).h, 240.0, 1e-9, "HWB hue for blue");
+    near (Convert.to_hwb (hex ("#808080")).h, 0.0, 1e-12, "HWB hue for grey is 0");
+
+    /* to_byte rounds half away from zero, which is the boundary most likely to
+     * drift if the rounding call is ever changed. */
+    check (Convert.to_byte (0.5 / 255.0) == 1, "a half byte rounds up");
+    check (Convert.to_byte (0.4 / 255.0) == 0, "below a half byte rounds down");
+    check (Convert.to_byte (254.5 / 255.0) == 255, "the top half byte rounds up");
+    check (Convert.to_byte (0.0) == 0 && Convert.to_byte (1.0) == 255, "the ends are exact");
+
+    /* The gamut clamp of CORE.md 8.7 can move hue, and on a saturated colour it
+     * moves it a long way. That is the documented v1.0 trade-off; this measures
+     * it rather than leaving it as a claim, and pins that the result is still
+     * inside sRGB and still eleven swatches. */
+    Rgb[] vivid = Ramp.build (hex ("#FAD700"));
+    check (vivid.length == 11, "a vivid ramp is eleven swatches");
+    double vivid_hue = Convert.to_oklch (hex ("#FAD700")).h;
+    double worst = 0.0;
+    int clamped_count = 0;
+    for (int i = 0; i < vivid.length; i++) {
+        bool on_bound = vivid[i].r <= 0.0 || vivid[i].r >= 1.0
+                     || vivid[i].g <= 0.0 || vivid[i].g >= 1.0
+                     || vivid[i].b <= 0.0 || vivid[i].b >= 1.0;
+        if (!on_bound) {
+            continue;
+        }
+        clamped_count++;
+        double d = Math.fabs (Convert.to_oklch (vivid[i]).h - vivid_hue);
+        if (d > 180.0) {
+            d = 360.0 - d;
+        }
+        if (d > worst) {
+            worst = d;
+        }
+    }
+    check (clamped_count > 0, "a vivid ramp does leave sRGB somewhere");
+    check (worst > 1.0, "clamping really does move hue, as 8.7 says it may");
+    check (worst < 90.0, "the clamp does not send a swatch to the far side of the wheel");
+
     /* Out-of-range row indices must not read past the label table. */
     same (Colour.row_label (14), "", "a row index past the end has no label");
     same (Colour.row_label (-1), "", "a negative row index has no label");

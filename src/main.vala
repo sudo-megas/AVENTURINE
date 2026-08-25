@@ -115,6 +115,17 @@ namespace Aventurine {
             theme.start ();
         }
 
+        protected override void shutdown () {
+            /* Theme cannot tear itself down in a destructor: its D-Bus
+             * subscription holds a strong reference to it, so the destructor
+             * would have to run to release the reference that keeps it from
+             * running. Teardown is explicit for that reason. */
+            if (theme != null) {
+                theme.stop ();
+            }
+            base.shutdown ();
+        }
+
         protected override void activate () {
             var win = this.active_window;
             if (win == null) {

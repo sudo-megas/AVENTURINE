@@ -27,6 +27,15 @@ private void near (double got, double want, double tol, string what) {
     }
 }
 
+/* Asserts and returns the verdict, so a block guarded on a condition cannot
+ * disagree with the assertion that condition was supposed to make. Writing the
+ * test as check(...) followed by a separate if(...) let the two drift apart,
+ * and the suite reported success while quietly running six fewer assertions. */
+private bool guard (bool ok, string what) {
+    check (ok, what);
+    return ok;
+}
+
 private void same (string got, string want, string what) {
     checks++;
     if (got != want) {
@@ -44,8 +53,10 @@ private Rgb hex (string s) {
     return c;
 }
 
+private int last_count = 0;
 private void section (string name) {
-    stdout.printf ("%s\n", name);
+    stdout.printf ("[%d] %s\n", checks - last_count, name);
+    last_count = checks;
 }
 
 /* --- 1. luminance ---------------------------------------------------- */
@@ -57,7 +68,6 @@ private void test_luminance () {
     /* Mid grey. If this reads about 0.2159 the gamma function is on the right
      * side; if it reads about 0.5 it is being skipped entirely. */
     near (Convert.luminance (hex ("#808080")), 0.2158605001, 1e-9, "#808080 luminance");
-    near (Convert.luminance (hex ("#808080")), 0.2159, 1e-4, "#808080 luminance to four places");
 
     /* Luminance is monotonic in each channel. */
     check (Convert.luminance (hex ("#00FF00")) > Convert.luminance (hex ("#FF0000")),
@@ -88,8 +98,10 @@ private void test_lab () {
 
     /* LCH is the polar form of the same numbers. */
     Lch lch = Convert.to_lch (hex ("#FF0000"));
+    /* Pins the field order of the Lch struct: a swapped C and H is caught. */
     near (lch.l, red.l, 1e-12, "LCH lightness matches LAB");
-    near (lch.c, Math.sqrt (red.a * red.a + red.b * red.b), 1e-12, "LCH chroma");
+    near (lch.c, 104.5518, 1e-3, "sRGB red LCH chroma");
+    near (lch.h, 39.9990, 1e-3, "sRGB red LCH hue");
     check (lch.h >= 0.0 && lch.h < 360.0, "LCH hue is normalised to 0..360");
 
     /* Hue must wrap into the positive range, not come back negative. */
@@ -486,11 +498,13 @@ source = "image"
     var history = new History ();
     history.load ();
 
-    check (history.size == 3, "three of the five entries survive a malformed file");
-    if (history.size == 3) {
+    if (guard (history.size == 4, "four of the five entries survive a malformed file")) {
         same (history.get_at (0).hex, "#A1B2C3", "first surviving entry");
         same (history.get_at (1).hex, "#4E6E5D", "second surviving entry");
-        same (history.get_at (2).hex, "#DEB887", "third surviving entry");
+        /* Recovered from under a damaged "[[entry" header, which is treated as
+         * a boundary rather than as an unreadable line. */
+        same (history.get_at (2).hex, "#123456", "an entry under a damaged header is recovered");
+        same (history.get_at (3).hex, "#DEB887", "fourth surviving entry");
         /* A missing source field must not lose the entry. */
         same (history.get_at (1).source, "unknown", "a missing source becomes unknown");
         same (history.get_at (0).source, "portal", "the source field is kept");
@@ -506,8 +520,7 @@ source = "image"
     check (history.save (), "history saves");
     var reloaded = new History ();
     reloaded.load ();
-    check (reloaded.size == 3, "a saved history reloads with the same count");
-    if (reloaded.size == 3) {
+    if (guard (reloaded.size == 4, "a saved history reloads with the same count")) {
         same (reloaded.get_at (0).hex, "#A1B2C3", "round trip keeps order");
         same (reloaded.get_at (0).at, "2026-08-25T14:03:11+03:00", "round trip keeps the timestamp");
     }
@@ -559,8 +572,7 @@ source = "portal"
 """);
     var messy = new History ();
     messy.load ();
-    check (messy.size == 3, "shorthand, bare and padded hex all load");
-    if (messy.size == 3) {
+    if (guard (messy.size == 3, "shorthand, bare and padded hex all load")) {
         same (messy.get_at (0).hex, "#AABBCC", "shorthand hex is expanded and normalised");
         same (messy.get_at (1).hex, "#A1B2C3", "a missing hash is added");
         same (messy.get_at (2).hex, "#4E6E5D", "padding is stripped and case normalised");
@@ -578,8 +590,7 @@ source = "portal"
 """);
     var broken = new History ();
     broken.load ();
-    check (broken.size == 1, "an entry with one unreadable field still loads");
-    if (broken.size == 1) {
+    if (guard (broken.size == 1, "an entry with one unreadable field still loads")) {
         check (!broken.get_at (0).at.has_prefix ("\""),
                "an unterminated value does not keep its opening quote");
         check (!broken.to_toml ().contains ("\"\"unterminated"),
@@ -594,8 +605,7 @@ source = "portal" # picked from the wallpaper
 """);
     var commented = new History ();
     commented.load ();
-    check (commented.size == 1, "a commented line loads");
-    if (commented.size == 1) {
+    if (guard (commented.size == 1, "a commented line loads")) {
         same (commented.get_at (0).source, "portal", "a trailing comment is not part of the value");
     }
 

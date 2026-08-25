@@ -111,8 +111,20 @@ namespace Aventurine {
             foreach (string raw in contents.split ("\n")) {
                 string line = raw.strip ();
 
-                if (line == "[[entry]]") {
+                /* Any table header starts a new entry, including a damaged
+                 * one. Treating "[[entry" as an ordinary unreadable line meant
+                 * it never flushed the entry above it, so the fields below it
+                 * were folded into the previous entry and silently dropped by
+                 * the first-wins rule. */
+                if (line.has_prefix ("[[")) {
                     commit (ref hex, ref at, ref source);
+                    /* Newest first, so once the cap is full the rest of the
+                     * file is older than anything that would survive it. A
+                     * tampered or oversized file therefore costs bounded work
+                     * on the startup path instead of parsing megabytes. */
+                    if (items.length >= CAP) {
+                        return;
+                    }
                     continue;
                 }
                 if (line == "" || line.has_prefix ("#")) {

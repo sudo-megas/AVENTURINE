@@ -63,7 +63,8 @@ namespace Aventurine {
             return to_gpl (history);
         }
 
-        /* Returns the written path, or null if the user cancelled. */
+        /* Returns the written path, or null if the user dismissed the dialog.
+         * A failure to choose a destination or to write one throws. */
         public async string? run (Gtk.Window parent, History history) throws Error {
             var dialog = new Gtk.FileDialog ();
             dialog.title = "Export palette";

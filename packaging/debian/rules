@@ -1,0 +1,35 @@
+#!/bin/sh
+# Assemble the staging tree and build the .deb.
+#
+# Deliberately a plain shell script rather than a debhelper makefile: the
+# package is one binary and four data files, and the Makefile already honours
+# DESTDIR and PREFIX, which is the whole of what packaging needs from it.
+set -eu
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+
+VERSION="$(sed -n 's/^Version: \(.*\)$/\1/p' packaging/debian/control)"
+ARCH="$(sed -n 's/^Architecture: \(.*\)$/\1/p' packaging/debian/control)"
+STAGE="packaging/debian/staging"
+OUTPUT="aventurine_${VERSION}_${ARCH}.deb"
+
+rm -rf "$STAGE"
+
+# The binary and data files, straight out of the Makefile's install target.
+make DESTDIR="$STAGE" PREFIX=/usr install
+
+# Debian keeps the licence under /usr/share/doc, not /usr/share/licenses.
+install -d "$STAGE/usr/share/doc/aventurine"
+install -m644 LICENSE "$STAGE/usr/share/doc/aventurine/copyright"
+rm -rf "$STAGE/usr/share/licenses"
+
+install -d "$STAGE/DEBIAN"
+install -m644 packaging/debian/control "$STAGE/DEBIAN/control"
+
+# Installed-Size is in kibibytes and is what apt reports before download.
+SIZE="$(du -ks "$STAGE/usr" | cut -f1)"
+printf 'Installed-Size: %s\n' "$SIZE" >> "$STAGE/DEBIAN/control"
+
+dpkg-deb --build --root-owner-group "$STAGE" "$OUTPUT"
+echo "built $OUTPUT"

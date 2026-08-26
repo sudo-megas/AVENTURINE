@@ -2,17 +2,10 @@
     <img width="100%" src="data/banner.png">
 </p>
 
-<p align="center">
+<h1 align="center">AVENTURINE</h1>
+<p align="center"><strong>Pick a colour from the screen. Click a pixel, get 14 properties that the image has.</strong></p>
+<p align="center"><strong>HEX RGB RGB% HSL HSV HWB CMYK Linear-RGB LAB LCH OKLCH Luminance CSS-name xkcd-name</strong></p>
 
-# AVENTURINE
-
-<p align="center">
-
-**Pick a colour from the screen. Click a pixel, get 14 properties that the image has.**
-
-***HEX RGB RGB% HSL HSV HWB CMYK Linear-RGB LAB LCH OKLCH Luminance CSS-name xkcd-name***
-
-</p>
 
 <p align="center">
   <img alt="Arch Linux package" src="https://img.shields.io/badge/Arch%20Linux-106%20KB-1793D1?style=for-the-badge&logo=archlinux&logoColor=white">

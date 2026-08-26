@@ -1,8 +1,13 @@
-<div align="center">
-
-<img src="data/banner.svg" alt="AVENTURINE" width="100%">
+<p align="center" width="100%">
+    <img width="100%" src="data/banner.png">
+</p>
 
 # AVENTURINE
+
+**Pick a colour from the screen. Click a pixel, get 14 properties that the image has.**
+
+***HEX RGB RGB% HSL HSV HWB CMYK Linear-RGB LAB LCH OKLCH Luminance CSS-name xkcd-name***
+
 
 <p align="center">
   <img alt="Arch Linux package" src="https://img.shields.io/badge/Arch%20Linux-106%20KB-1793D1?style=for-the-badge&logo=archlinux&logoColor=white">
@@ -15,12 +20,6 @@
   <img alt="Licence"              src="https://img.shields.io/badge/licence-GPL--3.0--or--later-A81D33?style=for-the-badge">
 </p>
 
-
-**Pick a colour from the screen. Click a pixel, get 14 properties that the image has.**
-
-***HEX RGB RGB% HSL HSV HWB CMYK Linear-RGB LAB LCH OKLCH Luminance CSS-name xkcd-name***
-
-</div>
 
 ---
 
